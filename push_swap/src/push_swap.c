@@ -6,7 +6,7 @@
 /*   By: cadenegr <neo_dgri@hotmail.com>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/31 14:35:53 by cadenegr          #+#    #+#             */
-/*   Updated: 2024/02/21 10:52:40 by cadenegr         ###   ########.fr       */
+/*   Updated: 2025/09/30 12:28:27 by cadenegr         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,8 +23,8 @@ int	main(int argc, char **argv)
 		return (1);
 	if (!argument_processor(argc, argv, &g))
 	{
-		ft_printf("Error");
-		return (0);
+		ft_printf("Error\n");
+		return (1);
 	}
 	init_stacks(&g, &a, &b);
 	sort(&g, &a, &b);
