@@ -20,7 +20,7 @@ SRC_FILES = $(wildcard $(SRCDIR)/*.c)
 SRC = $(addprefix $(SRCDIR)/, $(SRC_FILES))
 OBJ = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SRC_FILES))
 
-LIBFT = $(LIBFTDIR)/libft.a
+LIBFT = $(LIBFTDIR)/libft_printf.a
 INCLUDES = -I./include -I$(LIBFTDIR)/include
 
 CC = gcc
@@ -32,10 +32,10 @@ RM = rm -rf
 
 all: $(NAME)
 
-$(NAME): $(LIBFT) $(OBJDIR) $(OBJ)
+$(NAME): $(LIBFT) $(OBJ)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $(NAME) $(OBJ) $(LDFLAGS)
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.c
+$(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 $(OBJDIR):
@@ -56,60 +56,46 @@ re: fclean all
 
 # Testing and Performance Analysis Targets
 test: $(NAME)
-	@echo "🧪 Running comprehensive algorithm tests..."
 	@./benchmark.sh
 
 quick_test: $(NAME)
-	@echo "⚡ Quick performance test..."
 	@echo "5 elements:" && ./$(NAME) 5 3 8 1 9 | wc -l
-	@echo "10 elements:" && seq 1 10 | shuf | xargs ./$(NAME) | wc -l
-	@echo "20 elements:" && seq 1 20 | shuf | xargs ./$(NAME) | wc -l
+	@echo "100 elements:" && seq 1 100 | shuf | xargs ./$(NAME) | wc -l
+	@echo "500 elements:" && seq 1 500 | shuf | xargs ./$(NAME) | wc -l
 
 benchmark: $(NAME)
-	@echo "📊 Performance benchmarking..."
-	@for size in 5 10 20 50 100; do \
-		echo "Size $$size: $$(seq 1 $$size | shuf | xargs ./$(NAME) | wc -l) moves"; \
-	done
-
-demo: $(NAME)
-	@echo "🎯 Algorithm demonstration..."
-	@echo "Input: 5 3 8 1 9"
-	@echo "Moves:"
-	@./$(NAME) 5 3 8 1 9
-	@echo ""
-	@echo "Total moves: $$(./$(NAME) 5 3 8 1 9 | wc -l)"
+	@python3 tester/checker.py
 
 stress: $(NAME)
-	@echo "💪 Stress testing with large inputs..."
-	@echo "500 elements: $$(seq 1 500 | shuf | xargs timeout 10s ./$(NAME) | wc -l) moves"
+	@python3 tester/checker.py 500 100 5500
 
 validate: $(NAME)
-	@echo "✅ Validating algorithm correctness..."
-	@python3 -c "import subprocess, sys; \
-	nums = [5,3,8,1,9]; \
-	moves = subprocess.check_output(['./$(NAME)'] + [str(n) for n in nums]).decode().strip().split('\n'); \
-	print(f'Input: {nums}'); \
-	print(f'Generated {len(moves)} moves'); \
-	print('Algorithm validation: PASS' if moves else 'No moves needed - already sorted')" 2>/dev/null || echo "Python validation not available"
+	@python3 tester/checker.py 100 20 700
+
+demo: $(NAME)
+	@echo "Input: 5 3 8 1 9"
+	@./$(NAME) 5 3 8 1 9
+	@echo "Total moves: $$(./$(NAME) 5 3 8 1 9 | wc -l)"
+
+visual: $(NAME)
+	@./visualize.sh
 
 help:
-	@echo "🚀 Push Swap - Available Targets:"
-	@echo "================================="
 	@echo "Building:"
-	@echo "  make          - Build push_swap"
-	@echo "  make clean    - Remove object files"
-	@echo "  make fclean   - Remove all build files"
-	@echo "  make re       - Rebuild completely"
+	@echo "  make            build push_swap"
+	@echo "  make clean      remove object files"
+	@echo "  make fclean     remove all build files"
+	@echo "  make re         rebuild from scratch"
 	@echo ""
-	@echo "Testing & Analysis:"
-	@echo "  make test       - Run comprehensive test suite"
-	@echo "  make quick_test - Quick performance check"
-	@echo "  make benchmark  - Performance benchmarking"
-	@echo "  make demo       - Algorithm demonstration"
-	@echo "  make stress     - Stress test with large inputs"
-	@echo "  make validate   - Correctness validation"
-	@echo "  make help       - Show this help"
+	@echo "Testing:"
+	@echo "  make test       input checks + sorting suite at the 42 limits"
+	@echo "  make benchmark  sorting suite only (3, 4, 5, 10, 50, 100, 500 numbers)"
+	@echo "  make stress     100 runs of 500 numbers, limit 5500"
+	@echo "  make validate   20 runs of 100 numbers, limit 700"
+	@echo "  make quick_test move counts for 5, 100 and 500 numbers"
+	@echo "  make demo       moves for 5 3 8 1 9"
+	@echo "  make visual     open the visualizer with 100 and 500 numbers"
 
-.PHONY: test quick_test benchmark demo stress validate help
+.PHONY: test quick_test benchmark stress validate demo visual help
 
 

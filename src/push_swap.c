@@ -23,7 +23,7 @@ int	main(int argc, char **argv)
 		return (1);
 	if (!argument_processor(argc, argv, &g))
 	{
-		ft_printf("Error\n");
+		write(2, "Error\n", 6);
 		return (1);
 	}
 	init_stacks(&g, &a, &b);

@@ -24,10 +24,11 @@ void	sort(t_g *g, t_s *a, t_s *b)
 		just_sort(g, a);
 	else if (g->size < 6)
 		sort_small(g, a, b);
-	else if (g->size < 121)
-		four(g, a, b);
 	else
-		eight(g, a, b);
+	{
+		divide_blocks(g, a, b, how_many_blocks(g->size));
+		pull_back(g, b, a);
+	}
 	b->top = -1;
 }
 
@@ -48,28 +49,4 @@ void	sort_small(t_g *g, t_s *a, t_s *b)
 	divide(g, a, b);
 	just_sort(g, a);
 	sort_to_a(g, b, a);
-}
-
-//sort for up to 120 stack size
-void	four(t_g *g, t_s *a, t_s *b)
-{
-	divide_four(g, a, b, 1);
-	divide_four(g, a, b, 2);
-	push_rest_of_div_four(g, a, b);
-	sort_if_div_four(g, b, a);
-}
-
-//sort for over 120 tack size
-void	eight(t_g *g, t_s *a, t_s *b)
-{
-	divide_four(g, a, b, 1);
-	divide_four(g, a, b, 2);
-	push_rest_of_div_four(g, a, b);
-	divide_eight(g, a, b, 4);
-	divide_four(g, a, b, 8);
-	push_rest_of_div_four(g, a, b);
-	divide_eight(g, a, b, 8);
-	divide_four(g, a, b, 16);
-	push_rest_of_div_four(g, a, b);
-	sort_if_div_four(g, b, a);
 }

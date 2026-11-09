@@ -1,353 +1,168 @@
-# Push Swap - Advanced Sorting Algorithm Implementation
+# push_swap
 
 [![42 School](https://img.shields.io/badge/42-School_Project-000000?style=for-the-badge&logo=42&logoColor=white)](https://42.fr/)
 [![C](https://img.shields.io/badge/c-%2300599C.svg?style=for-the-badge&logo=c&logoColor=white)](https://en.wikipedia.org/wiki/C_(programming_language))
-[![Algorithm](https://img.shields.io/badge/Algorithm-Divide_&_Conquer-blue?style=for-the-badge)](https://en.wikipedia.org/wiki/Divide-and-conquer_algorithm)
 
-## 📋 Project Overview
+Sort a list of integers using two stacks and a fixed set of 11 operations, in as few operations as possible. This is the 42 school `push_swap` project, solved with my own **block division** algorithm.
 
-**Push Swap** is a sophisticated sorting algorithm implementation that demonstrates advanced problem-solving skills and algorithmic thinking. This project showcases a custom **divide-and-conquer** approach to sort integers using only two stacks and a limited set of operations.
+| Numbers | Average moves | Worst seen | 42 full-score limit |
+|---|---|---|---|
+| 3 | 1 | 2 | 3 |
+| 5 | 8 | 10 | 12 |
+| 100 | ~580 | 617 | 700 |
+| 500 | ~5 100 | 5 278 | 5 500 |
 
-### 🎯 Professional Value
+Measured with `make test`: every order of 3, 4 and 5 numbers, 100 random runs of 100 numbers and 30 random runs of 500. Every run is replayed move by move to check that the stack really ends up sorted.
 
-This project demonstrates key skills sought by employers in software engineering:
-- **Algorithm Design**: Custom divide-and-conquer strategy with adaptive complexity
-- **Optimization**: Multi-tier approach based on input size for optimal performance
-- **Memory Management**: Efficient stack-based operations with minimal overhead
-- **Code Architecture**: Modular design with clear separation of concerns
-- **Problem Solving**: Converting complex constraints into elegant solutions
+## The rules
 
-## 🚀 Algorithm Strategy
+Two stacks, **A** and **B**. A starts with the numbers, B starts empty. The program prints the operations that sort A in ascending order, with the smallest number on top.
 
-### Adaptive Sorting Approach
+| Operation | Effect |
+|---|---|
+| `sa` `sb` `ss` | swap the top two numbers of A, of B, or of both |
+| `pa` `pb` | move the top number of B onto A, or of A onto B |
+| `ra` `rb` `rr` | rotate up: the top number goes to the bottom (A, B, both) |
+| `rra` `rrb` `rrr` | rotate down: the bottom number goes to the top (A, B, both) |
 
-The implementation uses a **size-adaptive strategy** that optimizes performance based on input characteristics:
+## The algorithm: block division
 
-```c
-// Algorithm selection based on input size
-if (g->size < 4)        just_sort(g, a);           // Direct sort
-else if (g->size < 6)   sort_small(g, a, b);       // 2-segment division
-else if (g->size < 121) four(g, a, b);             // 4-segment division  
-else                    eight(g, a, b);            // 8-segment division
+Every number is replaced by its **rank**, its position in the sorted list (0 = smallest). Then:
+
+### 1. Divide A into blocks and send them to B
+
+The ranks are cut into blocks: about `0.4 × √n` blocks, so 4 blocks for 100 numbers and 9 blocks for 500. Block 1 is the smallest ranks, block 2 the next, and so on.
+
+A is scanned with `ra`. Every number belonging to the current block is pushed to B with `pb`. When the whole block is in B, the next block starts.
+
+### 2. Split every block in 2 inside B
+
+Right after a `pb`, the number is compared to the **middle of its block**:
+
+- low half of the block → `rb`, it goes to the bottom of B
+- high half of the block → it stays on top
+
+So each block of A becomes two smaller piles in B, and B ends up roughly ordered: big numbers near the top, small ones near the bottom. When an `rb` is followed by an `ra`, both are done at once with `rr`.
+
+Example with `./push_swap 7 2 9 0 5 3 8 1 6 4` (2 blocks: ranks 0–4 and 5–9):
+
+```
+block 1: ranks 0-4, middle 2  ->  0 and 1 go to the bottom of B
+B (top → bottom):  4 3 2 . 0 1
+
+block 2: ranks 5-9, middle 7  ->  5 and 6 go to the bottom of B
+B (top → bottom):  8 9 7 . 4 3 2 . 0 1 . 5 6
+                   └ high ┘ └ high ┘ └ low ┘ └ low ┘
+                   block 2  block 1  block 1 block 2
 ```
 
-### 🔧 Core Operations
+The big numbers sit on top and the small ones at the bottom, so step 3 never has to rotate far. The full output is 32 moves:
+`ra pb ra pb rr pb ra pb rr pb pb pb pb rb pb pb rb pa pa sa pa rrb pa pa rrb pa sa pa pa pa pa sa`
 
-The algorithm operates using only these fundamental stack operations:
-- **sa/sb**: Swap first two elements of stack
-- **pa/pb**: Push top element from one stack to another
-- **ra/rb**: Rotate stack (first element becomes last)
-- **rra/rrb**: Reverse rotate (last element becomes first)
-- **Combined operations**: ss, rr, rrr for simultaneous actions
+### 3. Pull the biggest number back to A
 
-## 🏗️ Architecture Deep Dive
+The biggest number left in B is brought to the top with `rb` or `rrb`, whichever direction is shorter, and pushed to A with `pa`. Because A is filled from the top, it ends up sorted. If the second biggest number is closer than the biggest, it goes first, then the biggest, and one `sa` fixes the order.
 
-### Data Structures
+### Small inputs
 
-```c
-typedef struct s_stack {
-    int top;                    // Stack pointer
-    int s[MAX_SIZE];           // Stack array
-} t_s;
+- **2–3 numbers:** sorted directly with `sa` / `ra` / `rra` (2 moves at most).
+- **4–5 numbers:** the smallest numbers go to B until 3 are left, those 3 are sorted, and B comes back (10 moves at most).
 
-typedef struct s_global_variables {
-    int original_array[MAX_SIZE];   // Input preservation
-    int sorted_array[MAX_SIZE];     // Reference for optimization
-    int size;                       // Current problem size
-    int moves;                      // Performance tracking
-} t_g;
-```
+### Why the block count matters
 
-### 🎯 Divide-and-Conquer Implementation
+More blocks mean more `ra` while scanning A. Fewer blocks mean more `rb` when pulling back. I measured the totals for each block count:
 
-#### Two-Segment Division (Small inputs: 4-5 elements)
-```c
-void divide(t_g *g, t_s *a, t_s *b) {
-    int middle_point = 2;
-    // Push smaller half to stack B, keep larger in A
-    // Optimizes for minimal rotation operations
-}
-```
+| Blocks | 100 numbers | 500 numbers |
+|---|---|---|
+| 2 | 643 | — |
+| 4 | **585** | — |
+| 6 | 616 | 5 264 |
+| 8 | 671 | **5 080** |
+| 10 | 736 | 5 139 |
+| 16 | — | 5 957 |
 
-#### Four-Segment Division (Medium inputs: 6-120 elements)
-```c
-void divide_four(t_g *g, t_s *a, t_s *b, int multiplier) {
-    int divider = g->size / (multiplier * 2);
-    // Segments data into quarters for balanced processing
-    // Reduces total operation count through strategic partitioning
-}
-```
+`how_many_blocks()` in [src/divide_blocks.c](src/divide_blocks.c) uses about `0.4 × √n`, which lands near the minimum for every size.
 
-#### Eight-Segment Division (Large inputs: 121+ elements)
-```c
-void divide_eight(t_g *g, t_s *a, t_s *b, int multiplier) {
-    // Advanced segmentation for complex datasets
-    // Minimizes worst-case scenarios through fine-grained control
-}
-```
-
-## 📊 Performance Analysis
-
-### Complexity Characteristics
-
-| Input Size | Strategy | Typical Moves | Worst Case |
-|------------|----------|---------------|------------|
-| 2-3        | Direct   | 0-2           | 2          |
-| 4-5        | 2-segment| 3-12          | 12         |
-| 6-120      | 4-segment| 15-700        | 700        |
-| 121+       | 8-segment| 350-1500      | 1500       |
-
-### Real-World Performance Benchmarks
+## Build and run
 
 ```bash
-# Testing with various input sizes
-./push_swap 5 3 8 1 9           # 9 moves  (5 elements)
-./push_swap 3 1 4 15 9 2 6      # 20 moves (7 elements)
-# 20 random numbers             # 87 moves (20 elements)
+git clone https://github.com/cadenegr/push_swap.git
+cd push_swap
+make
+./push_swap 5 3 8 1 9          # prints the moves, one per line
+./push_swap "5 3 8 1 9"        # numbers in one argument also work
+./push_swap 1 2 2              # prints "Error" on stderr
 ```
 
-## 🛠️ Technical Implementation
+Invalid input (letters, duplicates, numbers outside the `int` range, a lone `-`, an empty argument) prints `Error` followed by a newline on stderr. No input, or input that is already sorted, prints nothing.
 
-### Enhanced Build System
-```makefile
-# Professional Makefile with comprehensive targets
-CFLAGS = -Wall -Wextra -Werror
-INCLUDES = -I./include -I$(LIBFTDIR)/include  
-LDFLAGS = -L$(LIBFTDIR) -lft_printf
+## Testing
 
-# Available targets:
-# Building: make, make clean, make fclean, make re
-# Testing: make test, make quick_test, make benchmark
-# Analysis: make demo, make stress, make validate
-# Utilities: make help
+```bash
+make test        # input error checks + full sorting suite
+make benchmark   # sorting suite only
+make validate    # 20 runs of 100 numbers, limit 700
+make stress      # 100 runs of 500 numbers, limit 5500
+make help        # all targets
 ```
 
-### Comprehensive Error Handling
-- **Input Validation**: Duplicate detection with proper exit codes
-- **Memory Safety**: Stack boundary checking, allocation validation  
-- **Integer Protection**: Overflow detection and range validation
-- **Edge Cases**: Empty inputs, single elements, sorted sequences
-- **Graceful Failures**: Proper error messages and exit codes
+The checker ([tester/checker.py](tester/checker.py), Python 3) runs `push_swap`, replays every printed move on its own copy of the stacks, and fails a run if A is not sorted, B is not empty, a move is unknown, or the move count is over the limit. You can also call it directly:
 
-### Enterprise Code Organization
+```bash
+python3 tester/checker.py 100 50 700   # 50 runs of 100 numbers, limit 700
+```
+
+## Visualizer
+
+```bash
+make visual                # or: ./visualize.sh
+./visualize.sh 20 100      # choose the sizes
+./visualize.sh -n 5 3 8 1  # choose the exact numbers
+```
+
+This runs `push_swap`, saves the runs to `visualizer/data.js` and opens [visualizer/index.html](visualizer/index.html) in your browser. You can play, pause, step with ← →, change the speed, or drag through the run. Each number is a bar: longer and warmer means bigger. The strip at the bottom shows the whole run at a glance (`pb` blue, `pa` orange, rotations grey, swaps green). Click it to jump.
+
+You can also open `visualizer/index.html` on its own: it shows a sample run, and **Paste a run** accepts the numbers plus any program's output.
+
+## Project layout
+
 ```
 push_swap/
-├── README.md              # Comprehensive documentation
-├── Makefile               # Advanced build system
-├── benchmark.sh           # Performance testing suite  
-├── visualize.sh           # Algorithm demonstration
-├── test_push_swap.c       # Comprehensive test framework
+├── Makefile
+├── benchmark.sh            input checks + sorting suite (make test)
+├── visualize.sh            runs push_swap and opens the visualizer
 ├── include/
-│   └── push_swap.h        # Fully documented API
+│   ├── push_swap.h         structures and documented prototypes
+│   └── libft.h
 ├── src/
-│   ├── push_swap.c        # Main entry point
-│   ├── argument_processor.c # Input validation & parsing
-│   ├── stack_functions.c   # Core stack operations
-│   ├── sort_tree.c        # Algorithm selection logic
-│   ├── sort_two_div.c     # Small input optimization  
-│   ├── four_div.c         # Medium input strategy
-│   ├── sort_eight_div.c   # Large input handling
-│   └── error_handle.c     # Comprehensive error handling
-└── libft/                 # Custom library integration
+│   ├── push_swap.c         main: parse, build stack A, sort
+│   ├── argument_processor.c  read numbers from one or many arguments
+│   ├── error_handle.c      input validation (format, int range, duplicates)
+│   ├── build_stacks.c      fill stack A
+│   ├── stack_functions.c   push / pop / is_empty / is_full
+│   ├── a_stack_fts.c       sa ra rra pb
+│   ├── b_stack_fts.c       sb rb rrb pa
+│   ├── both_a_b_stack_fts.c  ss rr rrr
+│   ├── sort_tree.c         picks the strategy by input size
+│   ├── sort_two_div.c      2–5 numbers
+│   ├── divide_blocks.c     steps 1 and 2: blocks from A to B, split in 2
+│   └── pull_back.c         step 3: biggest number back to A
+├── tester/
+│   └── checker.py          replays the moves and checks the result
+├── visualizer/
+│   ├── index.html          the visualizer page
+│   └── sample-data.js      sample run shown when no data.js exists
+└── libft/                  my C library (with ft_printf)
 ```
 
-### API Documentation  
-The header file includes comprehensive documentation:
-- **Function specifications** with parameters and return values
-- **Algorithm complexity** analysis for each strategy  
-- **Usage examples** and optimization notes
-- **Real-world applications** and industry relevance
-- **Performance characteristics** for different input sizes
+## History
 
-## 🌟 Real-World Applications
+The first version (the one I submitted at 42) used fixed `four()` and `eight()` strategies. Its block split had a bug: the split point was `divider / 2`, counted from 0, not the middle of the current block. It only worked for the first block. Every later block landed in B without being split, and the 500-number strategy was built around that.
 
-### Industry Relevance
+Version 3 replaces both with one `divide_blocks()` that splits every block at its own middle, adds the "second biggest first" pull-back, and fixes a hang with 4 numbers.
 
-1. **Memory-Constrained Systems**: The stack-based approach mirrors embedded systems programming
-2. **Database Optimization**: Sorting strategies apply to query optimization and indexing
-3. **Distributed Computing**: Divide-and-conquer principles scale to parallel processing
-4. **Algorithm Engineering**: Demonstrates adaptive algorithm design principles
-
-### Skills Demonstrated
-
-- **Algorithm Analysis**: Understanding time/space complexity trade-offs
-- **Performance Optimization**: Size-adaptive strategy selection  
-- **System Programming**: Low-level memory management and stack operations
-- **Code Quality**: Modular architecture and comprehensive error handling
-- **Testing Methodology**: Enterprise-grade testing framework and benchmarking
-- **Build Engineering**: Advanced Makefile with multiple targets and workflows
-- **Documentation**: Professional API documentation and user guides  
-- **DevOps Practices**: Automated testing, performance validation, and CI/CD readiness
-- **Problem Solving**: Converting mathematical constraints into efficient algorithms
-- **Software Architecture**: Clean separation of concerns and scalable design patterns
-
-## 🚀 Quick Start & Testing
-
-### Prerequisites
-- GCC compiler with C99 support
-- Make build system
-- Unix-like environment (Linux/macOS)
-
-### Building the Project
-```bash
-# Clone and build
-git clone https://github.com/cadenegr/push_swap.git
-cd push_swap/push_swap
-make
-
-# Show all available build targets
-make help
-```
-
-### 🧪 Comprehensive Testing Suite
-
-The project includes enterprise-grade testing tools for performance analysis and validation:
-
-#### Quick Performance Tests
-```bash
-# Quick performance check across multiple sizes
-make quick_test
-
-# Run comprehensive benchmark suite
-make test
-
-# Algorithm demonstration with visualization
-make demo
-```
-
-#### Advanced Testing Tools
-
-**1. Performance Benchmarking (`./benchmark.sh`)**
-```bash
-# Full performance analysis with pattern testing
-./benchmark.sh
-
-# Example output:
-# Size   | Best     | Average  | Worst    | Max      | Status
-# 5      | 7        | 9        | 12       | 12       | PASS
-# 20     | 65       | 78       | 89       | 80       | PASS
-# 100    | 645      | 687      | 725      | 700      | PASS
-```
-
-**2. Algorithm Visualization (`./visualize.sh`)**
-```bash
-# Interactive algorithm demonstration
-./visualize.sh
-
-# Show specific demonstrations
-./visualize.sh small        # Small input demo
-./visualize.sh strategies   # Strategy selection demo
-./visualize.sh performance  # Performance comparison
-./visualize.sh realworld    # Real-world applications
-```
-
-**3. Build System Testing Targets**
-```bash
-make benchmark    # Performance benchmarking across sizes
-make stress       # Stress test with large inputs (500+ elements)
-make validate     # Algorithm correctness validation
-make demo         # Step-by-step algorithm demonstration
-```
-
-### 📊 Performance Validation
-
-#### Automated Test Results
-```bash
-# Edge case validation
-✅ Empty input handling
-✅ Single element optimization  
-✅ Already sorted detection (0 moves)
-✅ Duplicate detection with proper error codes
-✅ Integer overflow protection
-
-# Algorithm performance benchmarks  
-✅ 3 elements: 0-3 moves (avg: 1.2)
-✅ 5 elements: 3-12 moves (avg: 8.5)
-✅ 20 elements: 65-90 moves (avg: 78)
-✅ 100 elements: 600-750 moves (avg: 687)
-✅ 500 elements: 2800-3500 moves (avg: 3150)
-```
-
-#### Real-World Performance Benchmarks
-
-| Input Pattern | Size 5 | Size 20 | Size 100 | Size 500 |
-|---------------|--------|---------|----------|----------|
-| Random        | 9      | 78      | 687      | 3150     |
-| Reverse       | 10     | 89      | 725      | 3480     |
-| Almost Sorted | 4      | 45      | 234      | 1250     |
-| Already Sorted| 0      | 0       | 0        | 0        |
-
-### 🔧 Advanced Build Features
-
-The enhanced Makefile provides professional development workflow:
-
-```bash
-# Development workflow
-make          # Build optimized binary
-make clean    # Remove object files
-make fclean   # Complete cleanup
-make re       # Rebuild from scratch
-
-# Testing & validation
-make test       # Full test suite with benchmarks
-make quick_test # Fast performance check  
-make benchmark  # Detailed performance analysis
-make stress     # Large input stress testing
-make validate   # Correctness verification
-make demo       # Algorithm demonstration
-
-# Development tools
-make help       # Show all available targets
-```
-
-### 🎯 Testing Methodology
-
-The testing framework demonstrates industry-standard practices:
-
-1. **Unit Testing**: Individual function validation
-2. **Integration Testing**: Full algorithm workflow testing  
-3. **Performance Testing**: Scalability analysis across input sizes
-4. **Stress Testing**: Large input handling (500-1000 elements)
-5. **Edge Case Testing**: Boundary conditions and error handling
-6. **Regression Testing**: Ensuring optimizations don't break functionality
-
-### 📈 Benchmark Analysis Tools
-
-**Pattern Analysis**: Tests various input distributions
-- Random sequences (typical case)
-- Reverse sorted (worst case)  
-- Almost sorted (best case optimization)
-- Already sorted (edge case)
-
-**Scalability Testing**: Validates performance across sizes
-- Small (2-5): Direct sorting optimization
-- Medium (6-120): Four-segment division
-- Large (121+): Eight-segment division
-- Stress (500+): Algorithm robustness
-
-**Performance Metrics**: Comprehensive measurement
-- Move count efficiency
-- Execution time analysis  
-- Memory usage validation
-- Algorithm correctness verification
-
-## 🎓 Learning Outcomes
-
-This project demonstrates mastery of:
-- **Advanced C Programming**: Pointers, structures, memory management
-- **Algorithm Design**: Custom sorting with constraint optimization
-- **Performance Engineering**: Adaptive strategies for different input characteristics
-- **Software Architecture**: Modular design and clean code principles
-- **Problem Solving**: Converting mathematical constraints into efficient code
-
-## 🔧 Future Optimizations
-
-Potential enhancements for production environments:
-- **Parallel Processing**: Multi-threaded segment processing
-- **Cache Optimization**: Memory access pattern improvements
-- **Dynamic Adaptation**: Runtime strategy selection based on input patterns
-- **Visualization Tools**: Algorithm execution visualization for educational purposes
-
----
-
-**This project showcases enterprise-level algorithm development skills and demonstrates readiness for challenging software engineering positions requiring strong algorithmic foundations.**
+| | v2 | v3 |
+|---|---|---|
+| 100 numbers | 727 avg, 802 max | 580 avg, 617 max |
+| 500 numbers | 7 982 avg, 8 325 max | ~5 100 avg, 5 278 max |
+| 4 numbers | hung on 23 of 24 orders | 7 moves max |

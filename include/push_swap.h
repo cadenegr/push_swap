@@ -12,19 +12,18 @@
 
 /**
  * @file push_swap.h
- * @brief Advanced Divide-and-Conquer Sorting Algorithm Implementation
+ * @brief Block division sort: push_swap with two stacks and 11 operations
  * 
- * This header defines the interface for a sophisticated sorting algorithm
- * that uses only two stacks and a limited set of operations. The implementation
- * demonstrates enterprise-level algorithmic thinking and optimization strategies.
+ * Stack A is sent to B in blocks of ranks. Inside B every block is split
+ * in 2 (low half rotated to the bottom). Then the biggest number of B is
+ * pulled back to A, one by one, until A is sorted.
  * 
- * @algorithm Adaptive Divide-and-Conquer with Size-Based Strategy Selection
- * @complexity Best: O(n), Average: O(n log n), Worst: O(n²)
- * @memory O(n) auxiliary space for sorted reference array
+ * @algorithm Block division (blocks = ~0.4 * sqrt(n)) + greedy pull back
+ * @moves     100 numbers: ~580 on average, 500 numbers: ~5100 on average
+ * @memory    Fixed arrays of MAX_SIZE, no malloc
  * 
  * @author cadenegr <cadenegr@student.42berlin.de>
- * @version 2.0 Enterprise Edition
- * @date 2024-12-30
+ * @version 3.0
  */
 
 #ifndef PUSH_SWAP_H
@@ -49,10 +48,9 @@
 # define MAX_SIZE 1000
 
 /** @brief Strategy thresholds for algorithm selection */
-# define DIRECT_SORT_THRESHOLD    4    // Direct sorting for tiny inputs
-# define TWO_SEGMENT_THRESHOLD    6    // Two-segment division for small inputs  
-# define FOUR_SEGMENT_THRESHOLD   121  // Four-segment division for medium inputs
-                                       // Eight-segment for large inputs (121+)
+# define DIRECT_SORT_THRESHOLD    4    // 2-3 numbers: direct sort
+# define TWO_SEGMENT_THRESHOLD    6    // 4-5 numbers: smallest to b, sort 3
+                                       // 6+ numbers: block division
 
 /* ************************************************************************** */
 /*                              DATA STRUCTURES                              */
@@ -254,9 +252,8 @@ void	build_a_stack(t_g *g, t_s *s);
  * 
  * Implements size-adaptive strategy selection:
  * - Size < 4: Direct sorting
- * - Size < 6: Two-segment division  
- * - Size < 121: Four-segment division
- * - Size ≥ 121: Eight-segment division
+ * - Size < 6: Smallest numbers to B, sort 3, push back
+ * - Size ≥ 6: Block division (divide_blocks) + pull back (pull_back)
  */
 void	sort(t_g *g, t_s *a, t_s *b);
 
@@ -281,22 +278,6 @@ void	sort_three(t_g *g, t_s *a);
  * @param b Stack B
  */
 void	sort_small(t_g *g, t_s *a, t_s *b);
-
-/**
- * @brief Medium input sorting with four-segment strategy
- * @param g Global state
- * @param a Stack A
- * @param b Stack B
- */
-void	four(t_g *g, t_s *a, t_s *b);
-
-/**
- * @brief Large input sorting with eight-segment strategy
- * @param g Global state
- * @param a Stack A  
- * @param b Stack B
- */
-void	eight(t_g *g, t_s *a, t_s *b);
 
 /* ═══════════════════════════════════════════════════════════════════════ */
 /*                      PUSH_SWAP ALLOWED OPERATIONS                       */
@@ -385,7 +366,7 @@ void	rr(t_s *a, t_s *b, t_g *g);
 void	rrr(t_s *a, t_s *b, t_g *g);
 
 /* ═══════════════════════════════════════════════════════════════════════ */
-/*                        DIVIDE-AND-CONQUER ALGORITHMS                     */
+/*                         BLOCK DIVISION ALGORITHM                         */
 /* ═══════════════════════════════════════════════════════════════════════ */
 
 /**
@@ -396,21 +377,12 @@ void	rrr(t_s *a, t_s *b, t_g *g);
 bool	is_it_sorted(t_s *a);
 
 /**
- * @brief Two-segment division algorithm for small inputs
+ * @brief Small inputs (4-5): send the smallest to B until 3 are left
  * @param g Global state
  * @param a Stack A
  * @param b Stack B
  */
 void	divide(t_g *g, t_s *a, t_s *b);
-
-/**
- * @brief Four-segment division algorithm for medium inputs
- * @param g Global state
- * @param a Stack A
- * @param b Stack B
- * @param multiplier Division factor for segment sizing
- */
-void	divide_four(t_g *g, t_s *a, t_s *b, int multiplier);
 
 /**
  * @brief Find element position in sorted reference array
@@ -425,71 +397,43 @@ void	divide_four(t_g *g, t_s *a, t_s *b, int multiplier);
 int		search(int *array, int top, t_g *g);
 
 /**
- * @brief Sort elements in stack B by relative position
- * @param g Global state
- * @param b Stack B
- * @param divider Threshold for high/low classification
+ * @brief Number of blocks for a given size (about 0.4 * sqrt(size))
+ * @param size Amount of numbers to sort
+ * @return Block count (100 -> 4, 500 -> 9)
  */
-void	sort_high_and_low(t_g *g, t_s *b, int divider);
+int		how_many_blocks(int size);
 
 /**
- * @brief Transfer sorted elements from B back to A
+ * @brief Send A to B block by block, splitting every block in 2
+ * @param g Global state
+ * @param a Stack A
+ * @param b Stack B
+ * @param blocks Number of rank blocks
+ *
+ * Block i holds ranks [size*(i-1)/blocks, size*i/blocks). After pb, the
+ * low half of the block is rotated to the bottom of B (rb), so B ends up
+ * as small piles. An rb followed by an ra is merged into rr.
+ */
+void	divide_blocks(t_g *g, t_s *a, t_s *b, int blocks);
+
+/**
+ * @brief Pull the biggest number of B back to A until B is empty
+ * @param g Global state
+ * @param b Stack B
+ * @param a Stack A
+ *
+ * Rotates B the short way. If the second biggest is closer it is pushed
+ * first, then the biggest, and sa puts them in order.
+ */
+void	pull_back(t_g *g, t_s *b, t_s *a);
+
+/**
+ * @brief Small inputs: bring B back to A, biggest first
  * @param g Global state
  * @param b Source stack B
  * @param a Destination stack A
  */
 void	sort_to_a(t_g *g, t_s *b, t_s *a);
-
-/**
- * @brief Handle remaining elements in four-segment division
- * @param g Global state
- * @param a Stack A
- * @param b Stack B
- */
-void	push_rest_of_div_four(t_g *g, t_s *a, t_s *b);
-
-/**
- * @brief Eight-segment division algorithm for large inputs
- * @param g Global state
- * @param a Stack A
- * @param b Stack B
- * @param multiplier Division factor for segment sizing
- */
-void	divide_eight(t_g *g, t_s *a, t_s *b, int multiplier);
-
-/**
- * @brief Continue eight-segment division process
- * @param g Global state
- * @param a Stack A
- * @param b Stack B
- * @param divider Current division threshold
- */
-void	continue_div_eight(t_g *g, t_s *a, t_s *b, int divider);
-
-/**
- * @brief Transfer elements from B to A in organized blocks
- * @param g Global state
- * @param a Destination stack A
- * @param b Source stack B
- * @param divider Block size parameter
- */
-void	send_to_a_by_blocks(t_g *g, t_s *a, t_s *b, int divider);
-
-/**
- * @brief Sort elements from low to high values
- * @param a Stack A
- * @param g Global state
- * @param divider Sort threshold
- */
-void	sort_low_to_high(t_s *a, t_g *g, int divider);
-
-/**
- * @brief Handle four-segment division specific sorting
- * @param g Global state
- * @param b Stack B
- * @param a Stack A
- */
-void	sort_if_div_four(t_g *g, t_s *b, t_s *a);
 
 /**
  * @brief Check element position from bottom of stack

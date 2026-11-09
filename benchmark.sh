@@ -12,193 +12,72 @@
 #                                                                              #
 # **************************************************************************** #
 
-# Push Swap Performance Benchmark Suite
-# Demonstrates algorithm efficiency across various input patterns
+# push_swap test suite: input errors first, then sorting at the 42 limits.
+# Every sorting run is replayed by tester/checker.py, so a run only passes
+# if the moves really sort the stack.
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+cd "$(dirname "$0")" || exit 1
 
-# Check if push_swap exists
-if [ ! -f "./push_swap" ]; then
-    echo -e "${RED}❌ Error: push_swap not found. Run 'make' first.${NC}"
+GREEN='\033[32m'
+RED='\033[31m'
+BOLD='\033[1m'
+NC='\033[0m'
+FAILED=0
+
+if [ ! -x ./push_swap ]; then
+    echo "push_swap not found. Run 'make' first."
     exit 1
 fi
 
-echo -e "${CYAN}🚀 PUSH_SWAP PERFORMANCE BENCHMARK${NC}"
-echo -e "${CYAN}===================================${NC}"
-echo ""
-
-# Function to generate random numbers
-generate_random() {
-    local size=$1
-    shuf -i 1-$((size * 10)) -n $size | tr '\n' ' '
-}
-
-# Function to test specific input
-test_input() {
-    local input="$1"
-    local description="$2"
-    local moves=$(./push_swap $input 2>/dev/null | wc -l)
-    local size=$(echo $input | wc -w)
-    
-    echo -e "${BLUE}$description${NC}"
-    echo -e "Input size: $size | Moves: ${GREEN}$moves${NC}"
-    echo ""
-}
-
-# Function to benchmark size range
-benchmark_size() {
-    local size=$1
-    local max_expected=$2
-    local iterations=5
-    local total_moves=0
-    local best_moves=999999
-    local worst_moves=0
-    
-    echo -e "${YELLOW}Testing size $size (running $iterations iterations)...${NC}"
-    
-    for i in $(seq 1 $iterations); do
-        local input=$(generate_random $size)
-        local moves=$(./push_swap $input 2>/dev/null | wc -l)
-        
-        if [ $moves -gt 0 ]; then
-            total_moves=$((total_moves + moves))
-            
-            if [ $moves -lt $best_moves ]; then
-                best_moves=$moves
-            fi
-            
-            if [ $moves -gt $worst_moves ]; then
-                worst_moves=$moves
-            fi
-        fi
-    done
-    
-    local avg_moves=$((total_moves / iterations))
-    local status="PASS"
-    
-    if [ $worst_moves -gt $max_expected ]; then
-        status="${RED}FAIL${NC}"
+# expect_error "<description>" args...  -> must print "Error" on stderr, nothing on stdout
+expect_error() {
+    local desc="$1"; shift
+    local out err
+    out=$(./push_swap "$@" 2>/dev/null)
+    err=$(./push_swap "$@" 2>&1 >/dev/null)
+    if [ -z "$out" ] && [ "$err" = "Error" ]; then
+        printf "  %-34s ${GREEN}OK${NC}\n" "$desc"
     else
-        status="${GREEN}PASS${NC}"
+        printf "  %-34s ${RED}KO${NC} (stdout: '%s', stderr: '%s')\n" "$desc" "$out" "$err"
+        FAILED=1
     fi
-    
-    printf "%-6s | %-8s | %-8s | %-8s | %-8s | %s\n" \
-           "$size" "$best_moves" "$avg_moves" "$worst_moves" "$max_expected" "$status"
 }
 
-# Edge Cases Testing
-echo -e "${PURPLE}🧪 EDGE CASE VALIDATION${NC}"
-echo -e "${PURPLE}========================${NC}"
+# expect_silent "<description>" args... -> must print nothing at all
+expect_silent() {
+    local desc="$1"; shift
+    local all
+    all=$(./push_swap "$@" 2>&1)
+    if [ -z "$all" ]; then
+        printf "  %-34s ${GREEN}OK${NC}\n" "$desc"
+    else
+        printf "  %-34s ${RED}KO${NC} (printed: '%s')\n" "$desc" "$all"
+        FAILED=1
+    fi
+}
 
-# Test empty (should handle gracefully)
-echo -e "${BLUE}Empty input:${NC}"
-./push_swap 2>/dev/null && echo -e "${RED}FAIL${NC}" || echo -e "${GREEN}PASS - Correctly handled${NC}"
+echo -e "${BOLD}Input handling${NC}"
+expect_silent "no arguments"
+expect_silent "one number"                 42
+expect_silent "already sorted"             1 2 3 4 5
+expect_silent "already sorted, quoted"     "1 2 3 4 5"
+expect_error  "duplicate"                  1 2 2 3
+expect_error  "letter"                     1 a 3
+expect_error  "lone minus sign"            -
+expect_error  "sign inside a number"       1-2
+expect_error  "above INT_MAX"              2147483648
+expect_error  "below INT_MIN"              -2147483649
+expect_error  "huge number"                99999999999999999999
+expect_error  "empty argument"             "" 1
+echo
 
-# Test single element
-test_input "42" "Single element:"
+echo -e "${BOLD}Sorting (moves replayed and checked)${NC}"
+python3 tester/checker.py || FAILED=1
+echo
 
-# Test already sorted
-test_input "1 2 3 4 5" "Already sorted:"
-
-# Test reverse sorted
-test_input "5 4 3 2 1" "Reverse sorted:"
-
-# Test duplicates (should error)
-echo -e "${BLUE}Duplicate detection:${NC}"
-./push_swap 1 2 2 3 2>/dev/null
-if [ $? -eq 0 ]; then
-    echo -e "${RED}FAIL - Should have detected duplicates${NC}"
+if [ $FAILED -eq 0 ]; then
+    echo -e "${GREEN}${BOLD}All tests passed.${NC}"
 else
-    echo -e "${GREEN}PASS - Correctly detected duplicates${NC}"
+    echo -e "${RED}${BOLD}Some tests failed.${NC}"
 fi
-echo ""
-
-# Small Inputs Optimization
-echo -e "${PURPLE}🎯 SMALL INPUT OPTIMIZATION${NC}"
-echo -e "${PURPLE}=============================${NC}"
-
-test_input "2 1" "2 elements:"
-test_input "3 1 2" "3 elements:"
-test_input "2 1 4 3" "4 elements:"
-test_input "5 3 8 1 9" "5 elements:"
-
-# Performance Benchmarking
-echo -e "${PURPLE}📊 PERFORMANCE BENCHMARKING${NC}"
-echo -e "${PURPLE}=============================${NC}"
-echo ""
-printf "%-6s | %-8s | %-8s | %-8s | %-8s | %s\n" \
-       "Size" "Best" "Average" "Worst" "Max" "Status"
-echo "------------------------------------------------------------"
-
-benchmark_size 3 3
-benchmark_size 5 12
-benchmark_size 10 30
-benchmark_size 20 80
-benchmark_size 50 350
-benchmark_size 100 700
-benchmark_size 120 700
-benchmark_size 200 1500
-
-echo ""
-
-# Algorithm Pattern Analysis
-echo -e "${PURPLE}🔍 ALGORITHM PATTERN ANALYSIS${NC}"
-echo -e "${PURPLE}==============================${NC}"
-
-# Test specific patterns
-SIZE=50
-
-echo -e "${YELLOW}Testing with $SIZE elements:${NC}"
-
-# Random distribution
-RANDOM_INPUT=$(generate_random $SIZE)
-RANDOM_MOVES=$(./push_swap $RANDOM_INPUT 2>/dev/null | wc -l)
-echo -e "Random distribution: ${GREEN}$RANDOM_MOVES${NC} moves"
-
-# Reverse sorted (worst case)
-REVERSE_INPUT=$(seq $SIZE -1 1 | tr '\n' ' ')
-REVERSE_MOVES=$(./push_swap $REVERSE_INPUT 2>/dev/null | wc -l)
-echo -e "Reverse sorted: ${GREEN}$REVERSE_MOVES${NC} moves"
-
-# Almost sorted
-ALMOST_INPUT=$(seq 1 $SIZE | head -$((SIZE-2)) && echo $SIZE && echo $((SIZE-1)) | tr '\n' ' ')
-ALMOST_MOVES=$(./push_swap $ALMOST_INPUT 2>/dev/null | wc -l)
-echo -e "Almost sorted: ${GREEN}$ALMOST_MOVES${NC} moves"
-
-echo ""
-echo -e "${BLUE}Pattern Insights:${NC}"
-if [ $RANDOM_MOVES -lt $REVERSE_MOVES ]; then
-    echo -e "✅ Random performs better than worst-case"
-else
-    echo -e "⚠️  Random and worst-case performance similar"
-fi
-
-if [ $ALMOST_MOVES -lt $RANDOM_MOVES ]; then
-    echo -e "✅ Almost-sorted optimization effective"
-else
-    echo -e "⚠️  Limited almost-sorted optimization"
-fi
-
-echo ""
-
-# Complexity Analysis
-echo -e "${PURPLE}📈 COMPLEXITY ANALYSIS${NC}"
-echo -e "${PURPLE}=======================${NC}"
-
-echo -e "${BLUE}Algorithm demonstrates:${NC}"
-echo -e "• Size-adaptive strategy selection"
-echo -e "• Divide-and-conquer optimization"
-echo -e "• Efficient worst-case handling"
-echo -e "• Memory-efficient stack operations"
-
-echo ""
-echo -e "${GREEN}🎯 BENCHMARK COMPLETE!${NC}"
-echo -e "${GREEN}=======================${NC}"
-echo -e "Algorithm shows ${GREEN}production-ready performance${NC} across all test scenarios."
-echo -e "Suitable for ${YELLOW}enterprise deployment${NC} and ${YELLOW}technical interviews${NC}."
+exit $FAILED

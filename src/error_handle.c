@@ -13,23 +13,30 @@
 #include "libft.h"
 #include "push_swap.h"
 
-//checks if the arg, is digit, space, minus or plus.
+//checks the arg: numbers split by spaces, each one an optional + or -
+//and 1 to 12 digits. an arg with no number at all is wrong too.
 bool	correct_arguments(char *argv)
 {
 	t_v	x;
 
 	x.i = 0;
+	x.count = 0;
 	while (argv[x.i])
 	{
-		if (ft_isdigit(argv[x.i]) || argv[x.i] == ' ')
+		while (argv[x.i] == ' ')
 			x.i++;
-		else if ((argv[x.i] == '-' || argv[x.i] == '+')
-			&& (x.i == 0 || argv[x.i - 1] == ' '))
+		if (!argv[x.i])
+			break ;
+		if (argv[x.i] == '-' || argv[x.i] == '+')
 			x.i++;
-		else
+		x.length = 0;
+		while (ft_isdigit(argv[x.i]) && ++x.length)
+			x.i++;
+		if (x.length == 0 || x.length > 12 || (argv[x.i] && argv[x.i] != ' '))
 			return (false);
+		x.count++;
 	}
-	return (true);
+	return (x.count > 0);
 }
 
 //reception to send arg.

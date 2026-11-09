@@ -63,13 +63,13 @@ void	sort_three(t_g *g, t_s *a)
 	}
 }
 
-//divide in two segments
+//sends the smallest numbers to b until 3 are left in a
 void	divide(t_g *g, t_s *a, t_s *b)
 {
 	int	middle_point;
 	int	i;
 
-	middle_point = 2;
+	middle_point = g->size - 3;
 	while (!is_empty(&a->top))
 	{
 		i = 0;
@@ -85,5 +85,23 @@ void	divide(t_g *g, t_s *a, t_s *b)
 			ra(a, g);
 		if (a->top == 2)
 			break ;
+	}
+}
+
+//brings b back to a, biggest first (b holds the smallest numbers)
+void	sort_to_a(t_g *g, t_s *b, t_s *a)
+{
+	int		i;
+
+	i = b->top;
+	while (!is_empty(&b->top))
+	{
+		if (g->sorted_array[i] == b->s[b->top])
+		{
+			pa(b, a, g);
+			i--;
+		}
+		else
+			rb(b, g);
 	}
 }
