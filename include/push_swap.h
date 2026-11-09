@@ -12,18 +12,18 @@
 
 /**
  * @file push_swap.h
- * @brief Block division sort: push_swap with two stacks and 11 operations
+ * @brief push_swap: blocks crossing between the stacks, split in 2 each time
  * 
- * Stack A is sent to B in blocks of ranks. Inside B every block is split
- * in 2 (low half rotated to the bottom). Then the biggest number of B is
- * pulled back to A, one by one, until A is sorted.
+ * Numbers go A -> B in blocks of ranks, every block split in 2 (10 blocks).
+ * For big inputs they cross B -> A (20 blocks) and A -> B again (40 blocks),
+ * every block split in 2 at its own middle on the way. Then the biggest
+ * number of B is pulled back to A, one by one, until A is sorted.
  * 
- * @algorithm Block division (blocks = ~0.4 * sqrt(n)) + greedy pull back
- * @moves     100 numbers: ~580 on average, 500 numbers: ~5100 on average
- * @memory    Fixed arrays of MAX_SIZE, no malloc
+ * @moves  100 numbers: ~620 on average, 500 numbers: ~5330 on average
+ * @memory Fixed arrays of MAX_SIZE, no malloc
  * 
  * @author cadenegr <cadenegr@student.42berlin.de>
- * @version 3.0
+ * @version 3.1
  */
 
 #ifndef PUSH_SWAP_H
@@ -48,9 +48,12 @@
 # define MAX_SIZE 1000
 
 /** @brief Strategy thresholds for algorithm selection */
-# define DIRECT_SORT_THRESHOLD    4    // 2-3 numbers: direct sort
-# define TWO_SEGMENT_THRESHOLD    6    // 4-5 numbers: smallest to b, sort 3
-                                       // 6+ numbers: block division
+# define DIRECT_SORT_THRESHOLD    4    // Direct sorting for tiny inputs
+# define TWO_SEGMENT_THRESHOLD    6    // Two-segment division for small inputs  
+# define FOUR_SEGMENT_THRESHOLD   121  // below: one crossing (four)
+# define FIRST_BLOCKS             5    // blocks of the first crossing, each split in 2
+# define SPLIT_PERCENT            45   // low part of a block sent to the bottom when splitting
+                                       // Eight-segment for large inputs (121+)
 
 /* ************************************************************************** */
 /*                              DATA STRUCTURES                              */
@@ -92,6 +95,10 @@ typedef struct s_global_variables
 	int		high;                    /**< Current segment upper bound */
 	int		moves;                   /**< Total moves counter for performance tracking */
 	int		counter;                 /**< Algorithm state counter */
+	int		pile_lo[MAX_SIZE];       /**< Start rank of every block */
+	int		pile_hi[MAX_SIZE];       /**< End rank (excluded) of every block */
+	int		piles;                   /**< Number of blocks */
+	bool	to_a;                    /**< Current crossing goes B -> A */
 }	t_g;
 
 /**
@@ -253,7 +260,8 @@ void	build_a_stack(t_g *g, t_s *s);
  * Implements size-adaptive strategy selection:
  * - Size < 4: Direct sorting
  * - Size < 6: Smallest numbers to B, sort 3, push back
- * - Size ≥ 6: Block division (divide_blocks) + pull back (pull_back)
+ * - Size < 121: four(): one crossing A -> B, then pull back
+ * - Size ≥ 121: eight(): A -> B -> A -> B, then pull back
  */
 void	sort(t_g *g, t_s *a, t_s *b);
 
@@ -272,12 +280,28 @@ void	just_sort(t_g *g, t_s *a);
 void	sort_three(t_g *g, t_s *a);
 
 /**
- * @brief Small input sorting with two-segment strategy
+ * @brief 4-5 numbers: smallest to B until 3 are left, sort 3, push back
  * @param g Global state
  * @param a Stack A
  * @param b Stack B
  */
 void	sort_small(t_g *g, t_s *a, t_s *b);
+
+/**
+ * @brief Up to 120 numbers: divide_four (10 blocks in B), then pull back
+ * @param g Global state
+ * @param a Stack A
+ * @param b Stack B
+ */
+void	four(t_g *g, t_s *a, t_s *b);
+
+/**
+ * @brief 121+ numbers: divide_four, divide_eight twice (A -> B -> A -> B), pull back
+ * @param g Global state
+ * @param a Stack A  
+ * @param b Stack B
+ */
+void	eight(t_g *g, t_s *a, t_s *b);
 
 /* ═══════════════════════════════════════════════════════════════════════ */
 /*                      PUSH_SWAP ALLOWED OPERATIONS                       */
@@ -366,7 +390,7 @@ void	rr(t_s *a, t_s *b, t_g *g);
 void	rrr(t_s *a, t_s *b, t_g *g);
 
 /* ═══════════════════════════════════════════════════════════════════════ */
-/*                         BLOCK DIVISION ALGORITHM                         */
+/*                        DIVIDE-AND-CONQUER ALGORITHMS                     */
 /* ═══════════════════════════════════════════════════════════════════════ */
 
 /**
@@ -377,12 +401,41 @@ void	rrr(t_s *a, t_s *b, t_g *g);
 bool	is_it_sorted(t_s *a);
 
 /**
- * @brief Small inputs (4-5): send the smallest to B until 3 are left
+ * @brief 4-5 numbers: send the smallest to B until 3 are left
  * @param g Global state
  * @param a Stack A
  * @param b Stack B
  */
 void	divide(t_g *g, t_s *a, t_s *b);
+
+/**
+ * @brief First crossing A -> B: blocks of ranks, each split in 2
+ * @param g Global state
+ * @param a Stack A
+ * @param b Stack B
+ * @param blocks How many blocks of ranks (FIRST_BLOCKS)
+ *
+ * One pass over A per block: numbers of the block are pushed (pb), the
+ * others rotated (ra). After pb, the low half of the block goes to the
+ * bottom of B (rb), merged with the next ra into rr when possible.
+ * 5 blocks, each split in 2 = 10 blocks in B.
+ */
+void	divide_four(t_g *g, t_s *a, t_s *b, int blocks);
+
+/**
+ * @brief Remember the block of ranks [lo, hi)
+ */
+void	add_pile(t_g *g, int lo, int hi);
+
+/**
+ * @brief Rank where the block [lo, hi) is split (SPLIT_PERCENT of the block)
+ */
+int		split_point(int lo, int hi);
+
+/**
+ * @brief Keep the block list ordered from smallest ranks to biggest
+ */
+void	sort_piles(t_g *g);
 
 /**
  * @brief Find element position in sorted reference array
@@ -397,43 +450,33 @@ void	divide(t_g *g, t_s *a, t_s *b);
 int		search(int *array, int top, t_g *g);
 
 /**
- * @brief Number of blocks for a given size (about 0.4 * sqrt(size))
- * @param size Amount of numbers to sort
- * @return Block count (100 -> 4, 500 -> 9)
- */
-int		how_many_blocks(int size);
-
-/**
- * @brief Send A to B block by block, splitting every block in 2
- * @param g Global state
- * @param a Stack A
- * @param b Stack B
- * @param blocks Number of rank blocks
- *
- * Block i holds ranks [size*(i-1)/blocks, size*i/blocks). After pb, the
- * low half of the block is rotated to the bottom of B (rb), so B ends up
- * as small piles. An rb followed by an ra is merged into rr.
- */
-void	divide_blocks(t_g *g, t_s *a, t_s *b, int blocks);
-
-/**
- * @brief Pull the biggest number of B back to A until B is empty
- * @param g Global state
- * @param b Stack B
- * @param a Stack A
- *
- * Rotates B the short way. If the second biggest is closer it is pushed
- * first, then the biggest, and sa puts them in order.
- */
-void	pull_back(t_g *g, t_s *b, t_s *a);
-
-/**
- * @brief Small inputs: bring B back to A, biggest first
+ * @brief 4-5 numbers: bring B back to A, biggest first
  * @param g Global state
  * @param b Source stack B
  * @param a Destination stack A
  */
 void	sort_to_a(t_g *g, t_s *b, t_s *a);
+
+/**
+ * @brief One crossing: every block to the other stack, split in 2
+ * @param g Global state
+ * @param a Stack A
+ * @param b Stack B
+ * @param to_a true: B -> A (biggest block first), false: A -> B
+ *
+ * A block is either on top of the source or at its bottom (then every
+ * number needs rra/rrb first). Its low half goes to the bottom of the
+ * destination, so the number of blocks doubles: 10 -> 20 -> 40.
+ */
+void	divide_eight(t_g *g, t_s *a, t_s *b, bool to_a);
+
+/**
+ * @brief Pull back: biggest number of B to A, rotating the short way
+ * @param g Global state
+ * @param b Stack B
+ * @param a Stack A
+ */
+void	sort_if_div_four(t_g *g, t_s *b, t_s *a);
 
 /**
  * @brief Check element position from bottom of stack

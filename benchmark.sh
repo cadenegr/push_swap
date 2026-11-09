@@ -61,6 +61,8 @@ expect_silent "no arguments"
 expect_silent "one number"                 42
 expect_silent "already sorted"             1 2 3 4 5
 expect_silent "already sorted, quoted"     "1 2 3 4 5"
+expect_silent "spaces around quoted list"  " 1 2 3 "
+expect_silent "quoted group + single"      "1 2" 3 "4 5"
 expect_error  "duplicate"                  1 2 2 3
 expect_error  "letter"                     1 a 3
 expect_error  "lone minus sign"            -
@@ -69,6 +71,7 @@ expect_error  "above INT_MAX"              2147483648
 expect_error  "below INT_MIN"              -2147483649
 expect_error  "huge number"                99999999999999999999
 expect_error  "empty argument"             "" 1
+expect_error  "more than 1000 numbers"     $(seq 1 1001)
 echo
 
 echo -e "${BOLD}Sorting (moves replayed and checked)${NC}"

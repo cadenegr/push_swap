@@ -24,11 +24,10 @@ void	sort(t_g *g, t_s *a, t_s *b)
 		just_sort(g, a);
 	else if (g->size < 6)
 		sort_small(g, a, b);
+	else if (g->size < 121)
+		four(g, a, b);
 	else
-	{
-		divide_blocks(g, a, b, how_many_blocks(g->size));
-		pull_back(g, b, a);
-	}
+		eight(g, a, b);
 	b->top = -1;
 }
 
@@ -49,4 +48,21 @@ void	sort_small(t_g *g, t_s *a, t_s *b)
 	divide(g, a, b);
 	just_sort(g, a);
 	sort_to_a(g, b, a);
+}
+
+//up to FOUR_SEGMENT_THRESHOLD numbers: one crossing a -> b, then pull back
+void	four(t_g *g, t_s *a, t_s *b)
+{
+	divide_four(g, a, b, FIRST_BLOCKS);
+	sort_if_div_four(g, b, a);
+}
+
+//bigger: a -> b, b -> a, a -> b, each crossing doubles the blocks
+//(FIRST_BLOCKS = 5: 10 blocks in b, 20 in a, 40 in b), then pull back
+void	eight(t_g *g, t_s *a, t_s *b)
+{
+	divide_four(g, a, b, FIRST_BLOCKS);
+	divide_eight(g, a, b, true);
+	divide_eight(g, a, b, false);
+	sort_if_div_four(g, b, a);
 }

@@ -6,8 +6,9 @@ Usage:
     python3 tester/checker.py 100 50       # 50 random runs of 100 numbers
     python3 tester/checker.py 100 50 700   # same, and fail above 700 moves
 
-A run passes only if stack A ends sorted, stack B ends empty and the move
-count is within the limit. Exit code is 1 if any run fails.
+A run passes only if push_swap exits with 0 and prints nothing on stderr,
+stack A ends sorted, stack B ends empty and the move count is within the
+limit. Exit code is 1 if any run fails.
 """
 import itertools
 import os
@@ -60,11 +61,15 @@ def replay(nums, ops):
 
 def run(nums):
     try:
-        out = subprocess.run([PUSH_SWAP] + [str(n) for n in nums],
-                             capture_output=True, text=True, timeout=10).stdout
+        res = subprocess.run([PUSH_SWAP] + [str(n) for n in nums],
+                             capture_output=True, text=True, timeout=10)
     except subprocess.TimeoutExpired:
         return None, False, "timeout (10 s)"
-    ops = out.split()
+    if res.returncode != 0:
+        return None, False, f"exit code {res.returncode} {res.stderr.strip()[:60]}"
+    if res.stderr:
+        return None, False, f"stderr: {res.stderr.strip()[:60]}"
+    ops = res.stdout.split()
     ok, why = replay(nums, ops)
     return len(ops), ok, why
 
